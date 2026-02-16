@@ -6,6 +6,7 @@
 4. Hash DB Check         → cache / blocklist lookup
 5. Core Detection        → run all enabled detectors (30s timeout)
 6. Fusion                → cross-modal attention + trust score
+6.5. PentaShield         → HYDRA + SENTINEL analysis (FAZ 2)
 7. Explainability        → generate explanations
 8. Cache Result          → store in hash DB
 9. Report                → build ScanResult
@@ -35,6 +36,7 @@ from scanner.models.enums import (
 )
 from scanner.models.registry import DetectorRegistry
 from scanner.models.schemas import ScanResult
+from scanner.pentashield.engine import PentaShieldEngine
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,7 @@ class ScanOrchestrator:
         self.trust_engine = TrustScoreEngine()
         self.provenance = ProvenanceChecker()
         self.metadata_forensics = MetadataForensics()
+        self.pentashield = PentaShieldEngine()
 
     async def scan(
         self,
@@ -118,6 +121,28 @@ class ScanOrchestrator:
         threat_level = trust_result["threat_level"]
         trust_score = trust_result["trust_score"]
 
+        # Merge all detector results
+        all_results: dict[str, dict[str, Any]] = {}
+        for group in [visual_results, audio_results, text_results]:
+            all_results.update(group)
+
+        # === Step 6.5: PentaShield Analysis ===
+        pentashield_result = await self.pentashield.analyze(
+            detector_results=all_results,
+            fused_score=fused_score,
+            fused_confidence=fused_confidence,
+            media_type=media_type,
+            frames=detector_input.frames,
+        )
+
+        # Override verdict if PentaShield demands it
+        pentashield_data = pentashield_result.model_dump()
+        if pentashield_result.override_verdict is not None:
+            verdict = pentashield_result.override_verdict
+            trust_result = self.trust_engine.compute(fused_score, fused_confidence)
+            threat_level = trust_result["threat_level"]
+            trust_score = trust_result["trust_score"]
+
         # === Step 7: Explainability ===
         explanation = {
             **trust_result.get("explanation", {}),
@@ -127,11 +152,6 @@ class ScanOrchestrator:
             "defense": defense_results,
             "quality_weight": round(quality_weight, 4),
         }
-
-        # Merge all detector results
-        all_results = {}
-        for group in [visual_results, audio_results, text_results]:
-            all_results.update(group)
 
         elapsed = (time.perf_counter() - start) * 1000
 
@@ -144,7 +164,7 @@ class ScanOrchestrator:
             confidence=fused_confidence,
             threat_level=threat_level,
             detector_results=all_results,
-            pentashield={},
+            pentashield=pentashield_data,
             explanation=explanation,
             processing_time_ms=elapsed,
         )

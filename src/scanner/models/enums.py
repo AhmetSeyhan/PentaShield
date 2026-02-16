@@ -35,6 +35,7 @@ class DetectorType(str, Enum):
     BIOLOGICAL = "biological"
     FUSION = "fusion"
     DEFENSE = "defense"
+    PENTASHIELD = "pentashield"
 
 
 class DetectorCapability(str, Enum):
@@ -46,6 +47,11 @@ class DetectorCapability(str, Enum):
     BIOLOGICAL_SIGNAL = "biological_signal"
     FREQUENCY_ANALYSIS = "frequency_analysis"
     GENERATOR_FINGERPRINT = "generator_fingerprint"
+    ADVERSARIAL_DEFENSE = "adversarial_defense"
+    OOD_DETECTION = "ood_detection"
+    PHYSICS_VERIFICATION = "physics_verification"
+    BIO_CROSS_CHECK = "bio_cross_check"
+    ANOMALY_DETECTION = "anomaly_detection"
 
 
 class DetectorStatus(str, Enum):

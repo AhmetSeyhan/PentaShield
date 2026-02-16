@@ -1,6 +1,5 @@
 """Tests for fusion modules."""
 
-import pytest
 
 from scanner.models.enums import ThreatLevel, Verdict
 

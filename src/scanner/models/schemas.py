@@ -28,6 +28,39 @@ class ScanRequest(BaseModel):
     options: dict[str, Any] = {}
 
 
+class HydraResult(BaseModel):
+    """HYDRA ENGINE output — adversarial-immune multi-head analysis."""
+
+    adversarial_detected: bool = False
+    purification_applied: bool = False
+    head_verdicts: list[float] = []
+    consensus_score: float = 0.5
+    minority_report: dict[str, Any] | None = None
+    robustness_score: float = 0.0
+
+
+class SentinelResult(BaseModel):
+    """ZERO-DAY SENTINEL output — OOD + physics + bio consistency."""
+
+    ood_score: float = 0.0
+    is_novel_type: bool = False
+    physics_score: float = 1.0
+    physics_anomalies: list[str] = []
+    bio_consistency: float = 1.0
+    anomaly_score: float = 0.0
+    alert_level: str = "none"
+
+
+class PentaShieldResult(BaseModel):
+    """Combined PentaShield analysis result."""
+
+    hydra: HydraResult = Field(default_factory=HydraResult)
+    sentinel: SentinelResult = Field(default_factory=SentinelResult)
+    override_verdict: Verdict | None = None
+    override_reason: str | None = None
+    processing_time_ms: float = 0.0
+
+
 class ScanResult(BaseModel):
     """Unified response for any scan."""
 

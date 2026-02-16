@@ -48,7 +48,7 @@ class TestQualityAdapter:
         assert report.level in (QualityLevel.HIGH, QualityLevel.MEDIUM)
 
     def test_assess_low_res(self):
-        from scanner.preprocessing.quality_adapter import QualityAdapter, QualityLevel
+        from scanner.preprocessing.quality_adapter import QualityAdapter
         qa = QualityAdapter()
         img = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
         report = qa.assess_image(img)
@@ -68,7 +68,7 @@ class TestQualityAdapter:
         assert report.level == QualityLevel.VERY_LOW
 
     def test_confidence_weight(self):
-        from scanner.preprocessing.quality_adapter import QualityAdapter, QualityReport, QualityLevel
+        from scanner.preprocessing.quality_adapter import QualityAdapter, QualityLevel, QualityReport
         qa = QualityAdapter()
         assert qa.get_confidence_weight(QualityReport(level=QualityLevel.HIGH)) == 1.0
         assert qa.get_confidence_weight(QualityReport(level=QualityLevel.VERY_LOW)) == 0.3
