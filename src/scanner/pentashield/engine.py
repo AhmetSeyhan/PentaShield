@@ -21,6 +21,8 @@ from scanner.models.schemas import (
     PentaShieldResult,
     SentinelResult,
 )
+from scanner.pentashield.active_probe.probe_session import ProbeSession
+from scanner.pentashield.forensic.attribution_engine import AttributionEngine
 from scanner.pentashield.hydra.adversarial_auditor import AdversarialAuditor
 from scanner.pentashield.hydra.input_purifier import InputPurifier
 from scanner.pentashield.hydra.minority_report import MinorityReport
@@ -68,6 +70,12 @@ class PentaShieldEngine:
         self.bio = BioConsistency()
         self.anomaly_scorer = AnomalyScorer()
 
+        # FORENSIC DNA
+        self.attribution = AttributionEngine()
+
+        # ACTIVE PROBE
+        self.probe = ProbeSession()
+
     async def analyze(
         self,
         detector_results: dict[str, dict],
@@ -75,6 +83,8 @@ class PentaShieldEngine:
         fused_confidence: float,
         media_type: MediaType,
         frames: list[np.ndarray] | None = None,
+        fps: float = 30.0,
+        defense_results: dict[str, Any] | None = None,
     ) -> PentaShieldResult:
         """Run full PentaShield analysis.
 
@@ -84,9 +94,11 @@ class PentaShieldEngine:
             fused_confidence: Confidence from fusion engine
             media_type: Type of media being analyzed
             frames: Optional video/image frames for physics + purifier analysis
+            fps: Frames per second (for active probe latency analysis)
+            defense_results: Optional defense module outputs (metadata, provenance)
 
         Returns:
-            PentaShieldResult with hydra + sentinel sub-results and optional override.
+            PentaShieldResult with hydra + sentinel + forensic + probe sub-results and optional override.
         """
         start = time.perf_counter()
 
@@ -98,9 +110,15 @@ class PentaShieldEngine:
         # === ZERO-DAY SENTINEL ===
         sentinel = self._run_sentinel(detector_results, frames)
 
+        # === FORENSIC DNA ===
+        forensic_dna = self._run_forensic(detector_results, frames, defense_results)
+
+        # === ACTIVE PROBE ===
+        active_probe = self._run_probe(media_type, frames, fps)
+
         # === Override Logic ===
         override_verdict, override_reason = self._check_overrides(
-            hydra, sentinel, fused_score
+            hydra, sentinel, fused_score, forensic_dna, active_probe
         )
 
         elapsed = (time.perf_counter() - start) * 1000
@@ -108,6 +126,8 @@ class PentaShieldEngine:
         return PentaShieldResult(
             hydra=hydra,
             sentinel=sentinel,
+            forensic_dna=forensic_dna,
+            active_probe=active_probe,
             override_verdict=override_verdict,
             override_reason=override_reason,
             processing_time_ms=round(elapsed, 2),
@@ -193,19 +213,41 @@ class PentaShieldEngine:
 
         return sentinel_result
 
+    def _run_forensic(
+        self,
+        detector_results: dict[str, dict],
+        frames: list[np.ndarray] | None,
+        defense_results: dict[str, Any] | None,
+    ):
+        """Run FORENSIC DNA: generator fingerprinting + attribution."""
+        return self.attribution.analyze(detector_results, frames, defense_results)
+
+    def _run_probe(
+        self,
+        media_type: MediaType,
+        frames: list[np.ndarray] | None,
+        fps: float,
+    ):
+        """Run ACTIVE PROBE: challenge-response liveness verification."""
+        return self.probe.run(media_type, frames, fps)
+
     @staticmethod
     def _check_overrides(
         hydra: HydraResult,
         sentinel: SentinelResult,
         fused_score: float,
+        forensic_dna: Any = None,  # ForensicDNAResult
+        active_probe: Any = None,  # ActiveProbeResult
     ) -> tuple[Verdict | None, str | None]:
         """Determine if PentaShield should override the fusion verdict.
 
-        Override scenarios (force UNCERTAIN + manual review):
-          1. Adversarial attack detected
-          2. Novel content type (high OOD)
-          3. Severe physics anomalies (score < 0.3)
-          4. Strong head disagreement + minority dissent
+        Override scenarios:
+          1. Adversarial attack detected → UNCERTAIN
+          2. Novel content type (high OOD) → UNCERTAIN
+          3. Severe physics anomalies (score < 0.3) → LIKELY_FAKE
+          4. Strong head disagreement + minority dissent → UNCERTAIN
+          5. Generator identified (confidence ≥ 0.8) → LIKELY_FAKE
+          6. Active probe detected playback → LIKELY_FAKE
 
         Returns:
             (override_verdict, override_reason) or (None, None) if no override.
@@ -247,6 +289,25 @@ class PentaShieldEngine:
                     f"(dissent magnitude: {dissent_mag:.2f}). "
                     f"Manual review recommended.",
                 )
+
+        # 5. Generator identified with high confidence → LIKELY_FAKE
+        if forensic_dna and forensic_dna.generator_detected:
+            if forensic_dna.generator_confidence >= 0.8:
+                return (
+                    Verdict.LIKELY_FAKE,
+                    f"Generator identified: {forensic_dna.generator_type} "
+                    f"(confidence: {forensic_dna.generator_confidence:.2f}). "
+                    f"Forensic analysis strongly indicates synthetic content.",
+                )
+
+        # 6. Active probe detected playback → LIKELY_FAKE
+        if active_probe and active_probe.probe_verdict == "playback":
+            return (
+                Verdict.LIKELY_FAKE,
+                f"Active probe detected playback/pre-recorded content "
+                f"(liveness score: {active_probe.liveness_score:.2f}). "
+                f"Not a live interaction.",
+            )
 
         # No override needed
         return (None, None)

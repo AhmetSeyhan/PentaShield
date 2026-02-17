@@ -133,6 +133,8 @@ class ScanOrchestrator:
             fused_confidence=fused_confidence,
             media_type=media_type,
             frames=detector_input.frames,
+            fps=detector_input.fps if detector_input.fps else 30.0,
+            defense_results=defense_results,
         )
 
         # Override verdict if PentaShield demands it
@@ -165,6 +167,7 @@ class ScanOrchestrator:
             threat_level=threat_level,
             detector_results=all_results,
             pentashield=pentashield_data,
+            attribution=pentashield_data.get("forensic_dna", {}).get("attribution_report"),
             explanation=explanation,
             processing_time_ms=elapsed,
         )

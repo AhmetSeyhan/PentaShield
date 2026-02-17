@@ -52,6 +52,8 @@ class DetectorCapability(str, Enum):
     PHYSICS_VERIFICATION = "physics_verification"
     BIO_CROSS_CHECK = "bio_cross_check"
     ANOMALY_DETECTION = "anomaly_detection"
+    SOURCE_ATTRIBUTION = "source_attribution"
+    ACTIVE_VERIFICATION = "active_verification"
 
 
 class DetectorStatus(str, Enum):

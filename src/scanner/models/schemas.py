@@ -51,11 +51,35 @@ class SentinelResult(BaseModel):
     alert_level: str = "none"
 
 
+class ForensicDNAResult(BaseModel):
+    """FORENSIC DNA output — generator fingerprinting + attribution."""
+
+    generator_detected: bool = False
+    generator_type: str | None = None
+    generator_confidence: float = 0.0
+    spectral_fingerprints: list[dict[str, Any]] = []
+    attribution_report: dict[str, Any] = {}
+    forensic_score: float = 0.0
+
+
+class ActiveProbeResult(BaseModel):
+    """ACTIVE PROBE output — challenge-response verification."""
+
+    probe_available: bool = False
+    challenges_run: int = 0
+    challenge_results: list[dict[str, Any]] = []
+    latency_analysis: dict[str, Any] = {}
+    liveness_score: float = 1.0
+    probe_verdict: str = "not_applicable"
+
+
 class PentaShieldResult(BaseModel):
     """Combined PentaShield analysis result."""
 
     hydra: HydraResult = Field(default_factory=HydraResult)
     sentinel: SentinelResult = Field(default_factory=SentinelResult)
+    forensic_dna: ForensicDNAResult = Field(default_factory=ForensicDNAResult)
+    active_probe: ActiveProbeResult = Field(default_factory=ActiveProbeResult)
     override_verdict: Verdict | None = None
     override_reason: str | None = None
     processing_time_ms: float = 0.0
