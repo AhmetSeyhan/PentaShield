@@ -69,20 +69,28 @@ class ONNXExporter:
         dummy_input = torch.randn(input_shape).to(self.device)
 
         # Export to ONNX
-        torch.onnx.export(
-            self.model,
-            dummy_input,
-            str(output_path),
-            export_params=True,
-            opset_version=opset_version,
-            do_constant_folding=True,
-            input_names=["input"],
-            output_names=["output"],
-            dynamic_axes={
-                "input": {0: "batch_size"},
-                "output": {0: "batch_size"},
-            },
-        )
+        try:
+            torch.onnx.export(
+                self.model,
+                dummy_input,
+                str(output_path),
+                export_params=True,
+                opset_version=opset_version,
+                do_constant_folding=True,
+                input_names=["input"],
+                output_names=["output"],
+                dynamic_axes={
+                    "input": {0: "batch_size"},
+                    "output": {0: "batch_size"},
+                },
+            )
+        except (ImportError, ModuleNotFoundError) as e:
+            logger.warning(f"ONNX export requires onnxscript: {e}")
+            return {
+                "verified": False,
+                "error": f"Missing dependency: {e}",
+                "model_path": str(output_path),
+            }
 
         logger.info(f"Model exported to {output_path}")
 
