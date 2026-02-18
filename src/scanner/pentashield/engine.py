@@ -17,6 +17,7 @@ import numpy as np
 
 from scanner.models.enums import MediaType, Verdict
 from scanner.models.schemas import (
+    GhostProtocolResult,
     HydraResult,
     PentaShieldResult,
     SentinelResult,
@@ -116,6 +117,9 @@ class PentaShieldEngine:
         # === ACTIVE PROBE ===
         active_probe = self._run_probe(media_type, frames, fps)
 
+        # === GHOST PROTOCOL ===
+        ghost_protocol = self._run_ghost_protocol()
+
         # === Override Logic ===
         override_verdict, override_reason = self._check_overrides(
             hydra, sentinel, fused_score, forensic_dna, active_probe
@@ -128,6 +132,7 @@ class PentaShieldEngine:
             sentinel=sentinel,
             forensic_dna=forensic_dna,
             active_probe=active_probe,
+            ghost_protocol=ghost_protocol,
             override_verdict=override_verdict,
             override_reason=override_reason,
             processing_time_ms=round(elapsed, 2),
@@ -230,6 +235,24 @@ class PentaShieldEngine:
     ):
         """Run ACTIVE PROBE: challenge-response liveness verification."""
         return self.probe.run(media_type, frames, fps)
+
+    @staticmethod
+    def _run_ghost_protocol():
+        """Run GHOST PROTOCOL: edge AI + federated + continual learning.
+
+        NOTE: Ghost Protocol is primarily for training/deployment, not real-time scanning.
+        Returns default stub values for API compatibility.
+        """
+        return GhostProtocolResult(
+            edge_model_available=False,
+            edge_model_size_mb=0.0,
+            edge_inference_time_ms=0.0,
+            federated_round=0,
+            privacy_budget_used=0.0,
+            continual_tasks_learned=0,
+            edge_score=0.5,
+            edge_confidence=0.1,
+        )
 
     @staticmethod
     def _check_overrides(

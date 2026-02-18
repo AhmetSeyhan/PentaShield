@@ -73,6 +73,19 @@ class ActiveProbeResult(BaseModel):
     probe_verdict: str = "not_applicable"
 
 
+class GhostProtocolResult(BaseModel):
+    """GHOST PROTOCOL output — edge AI + federated + continual learning."""
+
+    edge_model_available: bool = False
+    edge_model_size_mb: float = 0.0
+    edge_inference_time_ms: float = 0.0
+    federated_round: int = 0
+    privacy_budget_used: float = 0.0
+    continual_tasks_learned: int = 0
+    edge_score: float = 0.5
+    edge_confidence: float = 0.1
+
+
 class PentaShieldResult(BaseModel):
     """Combined PentaShield analysis result."""
 
@@ -80,6 +93,7 @@ class PentaShieldResult(BaseModel):
     sentinel: SentinelResult = Field(default_factory=SentinelResult)
     forensic_dna: ForensicDNAResult = Field(default_factory=ForensicDNAResult)
     active_probe: ActiveProbeResult = Field(default_factory=ActiveProbeResult)
+    ghost_protocol: GhostProtocolResult = Field(default_factory=GhostProtocolResult)
     override_verdict: Verdict | None = None
     override_reason: str | None = None
     processing_time_ms: float = 0.0
