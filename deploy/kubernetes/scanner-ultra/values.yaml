@@ -1,0 +1,168 @@
+# Scanner ULTRA Helm Chart Values
+
+replicaCount: 3
+
+image:
+  repository: scanner-ultra/api
+  pullPolicy: IfNotPresent
+  tag: "5.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+  hosts:
+    - host: api.scanner-ultra.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: scanner-ultra-tls
+      hosts:
+        - api.scanner-ultra.example.com
+
+resources:
+  limits:
+    cpu: 4000m
+    memory: 8Gi
+    nvidia.com/gpu: 1
+  requests:
+    cpu: 2000m
+    memory: 4Gi
+    nvidia.com/gpu: 1
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector:
+  accelerator: nvidia-tesla-t4
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - scanner-ultra
+          topologyKey: kubernetes.io/hostname
+
+# Environment variables
+env:
+  - name: SCANNER_ENVIRONMENT
+    value: "production"
+  - name: SCANNER_LOG_LEVEL
+    value: "INFO"
+  - name: SCANNER_REDIS_URL
+    value: "redis://scanner-redis:6379"
+  - name: SCANNER_DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: scanner-secrets
+        key: database-url
+  - name: SCANNER_S3_ENDPOINT
+    value: "http://minio:9000"
+  - name: SCANNER_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: scanner-secrets
+        key: api-key
+
+# PostgreSQL subchart
+postgresql:
+  enabled: true
+  auth:
+    username: scanner
+    password: changeme
+    database: scanner
+  primary:
+    resources:
+      requests:
+        memory: 2Gi
+        cpu: 1000m
+    persistence:
+      enabled: true
+      size: 20Gi
+
+# Redis subchart
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    resources:
+      requests:
+        memory: 1Gi
+        cpu: 500m
+    persistence:
+      enabled: true
+      size: 10Gi
+
+# MinIO (S3-compatible storage)
+minio:
+  enabled: true
+  mode: standalone
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+  persistence:
+    enabled: true
+    size: 100Gi
+  defaultBuckets: "scanner-media,scanner-models"
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics

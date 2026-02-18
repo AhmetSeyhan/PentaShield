@@ -1,0 +1,13 @@
+apiVersion: v2
+name: scanner-ultra
+description: Scanner ULTRA deepfake detection platform
+version: 5.0.0
+appVersion: "5.0.0"
+keywords:
+  - deepfake
+  - detection
+  - ai
+  - machine-learning
+maintainers:
+  - name: Scanner Technologies
+    email: ops@scanner-tech.ai

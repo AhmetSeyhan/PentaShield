@@ -1,0 +1,114 @@
+{
+  "dashboard": {
+    "title": "Scanner ULTRA - Production Metrics",
+    "tags": ["scanner", "deepfake", "ai"],
+    "timezone": "utc",
+    "panels": [
+      {
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"scanner-api\"}[5m])",
+            "legendFormat": "{{method}} {{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "Response Time (p95)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"scanner-api\"}[5m]))",
+            "legendFormat": "{{endpoint}}"
+          }
+        ]
+      },
+      {
+        "title": "Detector Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(detector_scans_total{status=\"success\"}[5m])) / sum(rate(detector_scans_total[5m]))",
+            "legendFormat": "Success Rate"
+          }
+        ]
+      },
+      {
+        "title": "GPU Utilization",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "DCGM_FI_DEV_GPU_UTIL",
+            "legendFormat": "GPU {{gpu}}"
+          }
+        ]
+      },
+      {
+        "title": "GPU Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "DCGM_FI_DEV_FB_USED / DCGM_FI_DEV_FB_FREE * 100",
+            "legendFormat": "GPU {{gpu}}"
+          }
+        ]
+      },
+      {
+        "title": "Verdict Distribution",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (verdict) (detector_verdicts_total)",
+            "legendFormat": "{{verdict}}"
+          }
+        ]
+      },
+      {
+        "title": "Active Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "scanner_active_connections",
+            "legendFormat": "Connections"
+          }
+        ]
+      },
+      {
+        "title": "Cache Hit Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(rate(cache_hits_total[5m])) / sum(rate(cache_requests_total[5m]))",
+            "legendFormat": "Hit Rate"
+          }
+        ]
+      },
+      {
+        "title": "PentaShield Overrides",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum by (reason) (pentashield_overrides_total)",
+            "legendFormat": "{{reason}}"
+          }
+        ]
+      },
+      {
+        "title": "API Errors",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "sum by (status_code) (rate(http_responses_total{status_code=~\"4..|5..\"}[5m]))",
+            "legendFormat": "{{status_code}}"
+          }
+        ]
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
