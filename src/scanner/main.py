@@ -22,8 +22,8 @@ async def lifespan(app: FastAPI):
     _configure_logging(settings)
     logger.info("Scanner ULTRA v%s starting (%s)", settings.version, settings.env)
 
-    # Registry will be populated when detectors register themselves
     registry = DetectorRegistry()
+    await _register_all_detectors(registry)
     logger.info("Detector registry ready — %d detectors", len(registry.all_detectors()))
 
     yield
@@ -31,6 +31,68 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Scanner ULTRA")
     await registry.shutdown_all()
+
+
+async def _register_all_detectors(registry: DetectorRegistry) -> None:
+    """Instantiate, register, and load all 19 detection engines concurrently."""
+    import asyncio
+
+    from scanner.core.audio.audio_ensemble import AudioEnsemble
+    from scanner.core.audio.cqt_detector import CQTDetector
+    from scanner.core.audio.ecapa_tdnn_detector import ECAPATDNNDetector
+    from scanner.core.audio.syncnet_detector import SyncNetDetector
+    from scanner.core.audio.voice_clone_detector import VoiceCloneDetector
+    from scanner.core.audio.wavlm_detector import WavLMDetector
+    from scanner.core.text.ai_text_detector import AITextDetector
+    from scanner.core.text.perplexity_detector import PerplexityDetector
+    from scanner.core.text.stylometric_detector import StylometricDetector
+    from scanner.core.visual.clip_detector import CLIPDetector
+    from scanner.core.visual.diffusion_artifact_detector import DiffusionArtifactDetector
+    from scanner.core.visual.efficientnet_detector import EfficientNetDetector
+    from scanner.core.visual.frequency_detector import FrequencyDetector
+    from scanner.core.visual.gan_artifact_detector import GANArtifactDetector
+    from scanner.core.visual.gaze_detector import GazeDetector
+    from scanner.core.visual.ppg_bio_detector import PPGBioDetector
+    from scanner.core.visual.visual_ensemble import VisualEnsemble
+    from scanner.core.visual.vit_detector import ViTDetector
+    from scanner.core.visual.xception_detector import XceptionDetector
+
+    detectors = [
+        # Visual (10)
+        CLIPDetector(),
+        EfficientNetDetector(),
+        XceptionDetector(),
+        ViTDetector(),
+        FrequencyDetector(),
+        GANArtifactDetector(),
+        DiffusionArtifactDetector(),
+        PPGBioDetector(),
+        GazeDetector(),
+        VisualEnsemble(),
+        # Audio (6)
+        WavLMDetector(),
+        ECAPATDNNDetector(),
+        CQTDetector(),
+        VoiceCloneDetector(),
+        SyncNetDetector(),
+        AudioEnsemble(),
+        # Text (3)
+        AITextDetector(),
+        StylometricDetector(),
+        PerplexityDetector(),
+    ]
+
+    for detector in detectors:
+        registry.register(detector)
+
+    # Load all models concurrently; failures are logged but don't block startup
+    results = await asyncio.gather(
+        *(d.load_model() for d in detectors),
+        return_exceptions=True,
+    )
+    for detector, result in zip(detectors, results):
+        if isinstance(result, Exception):
+            logger.warning("Detector %s failed to load: %s", detector.name, result)
 
 
 def create_app() -> FastAPI:

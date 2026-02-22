@@ -77,7 +77,9 @@ class CLIPDetector(BaseDetector):
                 inputs = self._processor(text=prompts, return_tensors="pt", padding=True)
                 inputs = {k: v.to(self.device) for k, v in inputs.items() if k != "pixel_values"}
                 emb = self.model.get_text_features(**inputs)
-                setattr(self, attr, self._l2_normalize(emb.cpu().numpy()))
+                # HuggingFace ≥4.x may return BaseModelOutputWithPooling instead of a tensor
+                emb_tensor = emb.pooler_output if hasattr(emb, "pooler_output") else emb
+                setattr(self, attr, self._l2_normalize(emb_tensor.cpu().numpy()))
 
     @staticmethod
     def _l2_normalize(x: np.ndarray) -> np.ndarray:
@@ -103,7 +105,9 @@ class CLIPDetector(BaseDetector):
                 px = self._processor(images=pil_img, return_tensors="pt")
                 px = {k: v.to(self.device) for k, v in px.items()}
                 with torch.no_grad():
-                    img_emb = self._l2_normalize(self.model.get_image_features(**px).cpu().numpy())
+                    img_feat = self.model.get_image_features(**px)
+                    img_tensor = img_feat.pooler_output if hasattr(img_feat, "pooler_output") else img_feat
+                    img_emb = self._l2_normalize(img_tensor.cpu().numpy())
                 sim_auth = float(np.mean(img_emb @ self._text_auth.T))
                 sim_fake = float(np.mean(img_emb @ self._text_fake.T))
                 scores.append(sim_fake / (sim_auth + sim_fake + 1e-8))
