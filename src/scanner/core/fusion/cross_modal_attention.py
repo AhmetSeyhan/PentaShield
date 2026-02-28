@@ -30,13 +30,28 @@ class CrossModalAttention:
         for name, results in [("visual", visual_results), ("audio", audio_results),
                                ("text", text_results)]:
             if results:
-                scores = [r.get("score", 0.5) for r in results.values()]
-                confs = [r.get("confidence", 0.0) for r in results.values()]
+                # Stub, skip ve hata sonuçlarını fusion'dan dışla
+                active = {
+                    k: r for k, r in results.items()
+                    if "stub" not in r.get("method", "")
+                    and r.get("status") not in ("skipped", "error", "SKIPPED", "ERROR")
+                    and r.get("confidence", 0.0) >= 0.15
+                }
+                if not active:
+                    continue
+                scores = [r.get("score", 0.5) for r in active.values()]
+                confs = [r.get("confidence", 0.0) for r in active.values()]
                 tc = sum(confs) + 1e-8
+                # Confidence-weighted mean of scores (düşük-confidence stub'lar neredeyse etkisiz)
+                weighted_score = sum(s * c for s, c in zip(scores, confs)) / tc
+                # Modality confidence: confidence-weighted mean of confidences
+                # (simple mean yerine — stub'ların etkisini azaltır)
+                conf_weighted_conf = sum(c * c for c in confs) / tc
                 modality_scores[name] = {
-                    "score": sum(s * c for s, c in zip(scores, confs)) / tc,
-                    "confidence": float(np.mean(confs)) if confs else 0.0,
-                    "n_detectors": len(results),
+                    "score": weighted_score,
+                    "confidence": float(conf_weighted_conf),
+                    "n_detectors": len(active),
+                    "raw_scores": scores,
                 }
 
         if not modality_scores:
@@ -75,7 +90,20 @@ class CrossModalAttention:
 
     @staticmethod
     def _agreement(ms: dict[str, dict]) -> float:
+        if not ms:
+            return 0.3
+        if len(ms) == 1:
+            # Tek modalite: o modalitedeki raw detector skorlarının agreement'ı kullan
+            info = next(iter(ms.values()))
+            raw = info.get("raw_scores", [info["score"]])
+            if len(raw) < 2:
+                # Tek detector → modality confidence'ını doğrudan kullan
+                return float(info.get("confidence", 0.3))
+            # Detector'lar kendi aralarında ne kadar anlaşıyor?
+            within_std = float(np.std(raw))
+            within_agreement = max(0.0, 1.0 - within_std * 4)
+            # Modality confidence ile çarp — hem agreement hem de güven dikkate alınır
+            return min(0.9, within_agreement * float(info.get("confidence", 0.5)) * 1.5)
+        # Birden fazla modalite: modality score'ları arasındaki agreement
         scores = [info["score"] for info in ms.values()]
-        if len(scores) < 2:
-            return 0.5
         return max(0.0, 1.0 - float(np.std(scores)) * 3)

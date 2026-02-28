@@ -40,6 +40,7 @@ async def _register_all_detectors(registry: DetectorRegistry) -> None:
     from scanner.core.audio.audio_ensemble import AudioEnsemble
     from scanner.core.audio.cqt_detector import CQTDetector
     from scanner.core.audio.ecapa_tdnn_detector import ECAPATDNNDetector
+    from scanner.core.audio.mel_audio_detector import MelAudioDetector
     from scanner.core.audio.syncnet_detector import SyncNetDetector
     from scanner.core.audio.voice_clone_detector import VoiceCloneDetector
     from scanner.core.audio.wavlm_detector import WavLMDetector
@@ -69,10 +70,11 @@ async def _register_all_detectors(registry: DetectorRegistry) -> None:
         PPGBioDetector(),
         GazeDetector(),
         VisualEnsemble(),
-        # Audio (6)
+        # Audio (7 — +MelAudioDetector Colab trained)
         WavLMDetector(),
         ECAPATDNNDetector(),
         CQTDetector(),
+        MelAudioDetector(),
         VoiceCloneDetector(),
         SyncNetDetector(),
         AudioEnsemble(),
@@ -87,7 +89,7 @@ async def _register_all_detectors(registry: DetectorRegistry) -> None:
 
     # Load all models concurrently; failures are logged but don't block startup
     results = await asyncio.gather(
-        *(d.load_model() for d in detectors),
+        *(d.ensure_loaded() for d in detectors),
         return_exceptions=True,
     )
     for detector, result in zip(detectors, results):

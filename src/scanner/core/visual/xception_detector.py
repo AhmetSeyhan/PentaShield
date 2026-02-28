@@ -27,12 +27,17 @@ class XceptionDetector(BaseDetector):
         return {DetectorCapability.VIDEO_FRAMES, DetectorCapability.SINGLE_IMAGE}
 
     async def load_model(self) -> None:
+        self._has_deepfake_weights = False
         try:
             import timm
             self.model = timm.create_model("xception", pretrained=not bool(self.model_path), num_classes=2)
             if self.model_path:
                 import torch
                 self.model.load_state_dict(torch.load(self.model_path, map_location=self.device, weights_only=True))
+                self._has_deepfake_weights = True
+                logger.info("Xception deepfake weights yüklendi: %s", self.model_path)
+            else:
+                logger.warning("Xception deepfake weights bulunamadı — ImageNet pretrained, güven düşük")
             self.model.to(self.device).eval()
         except ImportError:
             self.model = None
@@ -60,10 +65,14 @@ class XceptionDetector(BaseDetector):
                 with torch.no_grad():
                     scores.append(F.softmax(self.model(t), dim=-1)[0, 1].item())
             avg = float(np.mean(scores))
+            raw_conf = max(0.1, 1.0 - float(np.std(scores)) * 2)
+            # Deepfake weights yoksa classification head random → güven %20'ye düşür
+            confidence = raw_conf if self._has_deepfake_weights else raw_conf * 0.2
             return DetectorResult(detector_name=self.name, detector_type=self.detector_type,
-                                  score=avg, confidence=max(0.1, 1.0 - float(np.std(scores)) * 2),
-                                  method="xception_inference", status=DetectorStatus.PASS,
-                                  details={"n_frames": len(scores)})
+                                  score=avg, confidence=confidence,
+                                  method="xception_inference" if self._has_deepfake_weights else "xception_imagenet",
+                                  status=DetectorStatus.PASS,
+                                  details={"n_frames": len(scores), "deepfake_weights": self._has_deepfake_weights})
         except Exception as exc:
             return DetectorResult(detector_name=self.name, detector_type=self.detector_type,
                                   score=0.5, confidence=0.0, method="xception_error",

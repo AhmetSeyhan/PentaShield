@@ -25,7 +25,7 @@ class TrustScoreEngine:
     def compute(self, fused_score: float, confidence: float,
                 modality_details: dict[str, Any] | None = None) -> dict[str, Any]:
         trust_score = max(0.0, min(1.0, 1.0 - fused_score))
-        verdict = self._to_verdict(trust_score)
+        verdict = self._to_verdict(trust_score, confidence)
         threat = THREAT_MAP.get(verdict, ThreatLevel.MEDIUM)
         explanation = self._explain(trust_score, verdict, confidence)
         return {
@@ -37,16 +37,31 @@ class TrustScoreEngine:
         }
 
     @staticmethod
-    def _to_verdict(ts: float) -> Verdict:
-        if ts >= 0.8:
-            return Verdict.AUTHENTIC
-        if ts >= 0.6:
+    def _to_verdict(ts: float, confidence: float = 0.5) -> Verdict:
+        """Confidence'a göre adaptif threshold.
+
+        Yüksek confidence → dar uncertain bölgesi → net karar verir.
+        Düşük confidence → geniş uncertain bölgesi → muhafazakâr davranır.
+        """
+        # Uncertain bölgesinin genişliği: confidence yükseldikçe daralır
+        # conf=0.9 → uncertain bölgesi [0.47, 0.53]
+        # conf=0.5 → uncertain bölgesi [0.40, 0.60]
+        # conf=0.2 → uncertain bölgesi [0.35, 0.65]
+        half_width = 0.13 - confidence * 0.06  # [0.07, 0.13]
+        uncertain_lo = 0.5 - half_width
+        uncertain_hi = 0.5 + half_width
+
+        if ts > uncertain_hi:
+            # Authentic taraf
+            if ts >= 0.82:
+                return Verdict.AUTHENTIC
             return Verdict.LIKELY_AUTHENTIC
-        if ts >= 0.4:
-            return Verdict.UNCERTAIN
-        if ts >= 0.2:
+        if ts < uncertain_lo:
+            # Fake taraf
+            if ts <= 0.18:
+                return Verdict.FAKE
             return Verdict.LIKELY_FAKE
-        return Verdict.FAKE
+        return Verdict.UNCERTAIN
 
     @staticmethod
     def _explain(ts: float, verdict: Verdict, conf: float) -> dict[str, str]:
